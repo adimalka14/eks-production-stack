@@ -1,0 +1,15 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+
+# Sensitive files — never commit these
+*.pem
+*.key
+secrets.tfvars
+*secrets*.tfvars
