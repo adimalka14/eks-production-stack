@@ -1,0 +1,32 @@
+postgresql:
+  auth:
+    database: my_database
+    username: my_user
+    password: "secret_password"
+  primary:
+    persistence:
+      enabled: true
+      storageClass: gp3
+      size: 8Gi
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1"
+    tolerations:
+      - key: "workload"
+        operator: "Equal"
+        value: "database"
+        effect: "NoSchedule"
+    nodeAffinityPreset:
+      type: "hard"
+      key: "role"
+      values:
+        - db
+  metrics:
+    enabled: true
+
+backup:
+  schedule: "0 2 * * *"

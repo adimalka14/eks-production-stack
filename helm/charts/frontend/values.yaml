@@ -1,0 +1,30 @@
+fullname: "frontend-service"
+replicaCount: 1
+image:
+  repository: node
+  tag: "18-alpine"
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "100m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: production
+  className: alb
+  host: "frontend-service.example.com"
+
+servicemonitor:
+  enabled: false
+
+autoscaling:
+  enabled: false

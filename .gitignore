@@ -8,6 +8,10 @@ crash.log
 override.tf
 override.tf.json
 
+# Helm
+helm/charts/*/charts/*.tgz
+helm/charts/*/tmpcharts/
+
 # Sensitive files — never commit these
 *.pem
 *.key
