@@ -1,0 +1,23 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "backend.fullname" . }}-alerts
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: backend.rules
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job="{{ include "backend.fullname" . }}", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{job="{{ include "backend.fullname" . }}"}[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High error rate on backend"
+            description: "Error rate is above 5% for more than 5 minutes."
+{{- end }}

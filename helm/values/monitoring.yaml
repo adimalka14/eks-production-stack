@@ -1,0 +1,47 @@
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      spec:
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 10Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+grafana:
+  enabled: true
+  adminPassword: "secret_password"
+  sidecar:
+    dashboards:
+      enabled: true
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          orgId: 1
+          folder: ""
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      node-exporter:
+        gnetId: 1860    # Node Exporter Full
+        revision: 37
+        datasource: Prometheus
+      kubernetes-pods:
+        gnetId: 6417    # Kubernetes pods
+        revision: 1
+        datasource: Prometheus
+      postgresql:
+        gnetId: 9628    # PostgreSQL Database
+        revision: 7
+        datasource: Prometheus
+      nodejs-app:
+        gnetId: 11159   # Node.js Application (prom-client)
+        revision: 1
+        datasource: Prometheus

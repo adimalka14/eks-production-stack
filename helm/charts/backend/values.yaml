@@ -24,7 +24,9 @@ ingress:
   host: "backend-service.example.com"
 
 servicemonitor:
-  enabled: false
+  enabled: true
+prometheusRule:
+  enabled: true
 
 autoscaling:
   enabled: false
@@ -33,3 +35,14 @@ db:
   host: "postgres-service"
   port: "5432"
   name: "appdb"
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: role
+              operator: In
+              values:
+                - app
