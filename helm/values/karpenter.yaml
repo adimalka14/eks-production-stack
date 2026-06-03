@@ -1,0 +1,3 @@
+settings:
+  clusterName: eks-production-cluster
+  interruptionQueue: eks-production-cluster-karpenter
