@@ -27,6 +27,8 @@ postgresql:
         - db
   metrics:
     enabled: true
+    serviceMonitor:
+      enabled: true
 
 backup:
   schedule: "0 2 * * *"

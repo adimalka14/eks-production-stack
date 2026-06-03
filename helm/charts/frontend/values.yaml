@@ -24,7 +24,18 @@ ingress:
   host: "frontend-service.example.com"
 
 servicemonitor:
-  enabled: false
+  enabled: true
 
 autoscaling:
   enabled: false
+
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: role
+              operator: In
+              values:
+                - app
