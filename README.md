@@ -10,13 +10,13 @@ AWS
 │   ├── 2 Public subnets  — NAT Gateway, ALB entry point
 │   └── 2 Private subnets — EKS nodes (tagged for internal-elb)
 │
-├── EKS Cluster  (terraform-aws-modules/eks)
+├── EKS Cluster  (terraform-aws-modules/eks v21, AWS provider ~> 6.46)
 │   ├── OIDC provider (IRSA enabled)
 │   └── system node group — t3.medium, min 1 / max 3
 │       └── taint: CriticalAddonsOnly=true:NoSchedule
 │
-├── Karpenter  (EKS submodule)
-│   ├── Controller IAM role (IRSA)
+├── Karpenter  (EKS submodule v21, Pod Identity)
+│   ├── Controller IAM role
 │   ├── Node IAM role + instance profile
 │   └── SQS queue + EventBridge rules (spot interruption)
 │
