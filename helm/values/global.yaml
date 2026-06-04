@@ -1,0 +1,40 @@
+# ── Cluster ──────────────────────────────────────────────────────────────────
+clusterName: eks-production-cluster
+region: us-east-1
+
+# ── Domain ───────────────────────────────────────────────────────────────────
+# Leave empty to use the AWS ALB default DNS. Set to "yourdomain.com" to
+# enable custom hostnames and ExternalDNS Route53 records.
+domain: ""
+
+# ── Ingress (shared by frontend + backend) ───────────────────────────────────
+ingress:
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: production
+
+# ── Database connection (shared by backend + backup CronJob) ─────────────────
+db:
+  host: "database-postgresql"  # Bitnami service name: <helmfile-release-name>-postgresql
+  port: "5432"
+  name: "appdb"
+
+# ── Node affinity (shared by frontend + backend) ─────────────────────────────
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 1
+        preference:
+          matchExpressions:
+            - key: role
+              operator: In
+              values:
+                - app
+
+# ── VPA (shared by frontend + backend) ───────────────────────────────────────
+vpa:
+  enabled: true
+  updateMode: "Off"

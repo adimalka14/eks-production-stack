@@ -53,7 +53,7 @@ releases:
     needs:
       - production/database
     values:
-      - ./values/backend.yaml
+      - ./values/global.yaml
 
   - name: frontend
     namespace: production
@@ -61,4 +61,4 @@ releases:
     needs:
       - production/backend
     values:
-      - ./values/frontend.yaml
+      - ./values/global.yaml
