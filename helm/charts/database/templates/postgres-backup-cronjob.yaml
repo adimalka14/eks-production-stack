@@ -1,10 +1,14 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-sa
+  annotations:
+    eks.amazonaws.com/role-arn: {{ .Values.backup.irsaRoleArn }}
+---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ .Release.Name }}-db-backup
-  labels:
-    app.kubernetes.io/name: db-backup
-    app.kubernetes.io/instance: {{ .Release.Name }}
+  name: db-backup
 spec:
   schedule: {{ .Values.backup.schedule | quote }}
   concurrencyPolicy: Forbid
@@ -13,11 +17,52 @@ spec:
     spec:
       template:
         spec:
-          restartPolicy: OnFailure
+          serviceAccountName: backup-sa
+          initContainers:
+            - name: install-awscli
+              image: amazon/aws-cli:latest
+              command:
+                - cp
+                - -r
+                - /usr/local/aws-cli
+                - /tools/
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
           containers:
             - name: backup
-              image: postgres:15-alpine
+              image: bitnami/postgresql:18.4.0
+              env:
+                - name: DB_HOST
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: host
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: username
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: password
+                - name: DB_NAME
+                  value: {{ .Values.postgresql.auth.database }}
+                - name: S3_BUCKET
+                  value: {{ .Values.backup.s3Bucket }}
               command:
-                - /bin/sh
+                - /bin/bash
                 - -c
-                - echo "backup placeholder"
+                - |
+                  pg_dump -h $DB_HOST -U $DB_USER $DB_NAME | \
+                  gzip | /tools/aws-cli/v2/current/bin/aws s3 cp - \
+                  s3://${S3_BUCKET}/backups/db-$(date +%Y%m%d-%H%M%S).sql.gz
+              volumeMounts:
+                - name: tools
+                  mountPath: /tools
+          volumes:
+            - name: tools
+              emptyDir: {}
+          restartPolicy: OnFailure

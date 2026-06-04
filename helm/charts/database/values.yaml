@@ -31,4 +31,10 @@ postgresql:
       enabled: true
 
 backup:
-  schedule: "0 2 * * *"
+  schedule: "0 */6 * * *"
+  s3Bucket: "eks-production-stack-db-backups"
+  irsaRoleArn: ""  # set from terraform output irsa_backup_role_arn
+
+vpa:
+  enabled: true
+  updateMode: "Off"

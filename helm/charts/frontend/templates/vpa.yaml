@@ -1,0 +1,15 @@
+{{- if .Values.vpa.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "frontend.fullname" . }}-vpa
+  labels:
+    {{- include "frontend.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "frontend.fullname" . }}
+  updatePolicy:
+    updateMode: {{ .Values.vpa.updateMode | default "Off" }}
+{{- end }}
