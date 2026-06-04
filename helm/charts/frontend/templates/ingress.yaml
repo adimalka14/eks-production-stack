@@ -4,15 +4,20 @@ metadata:
   name: {{ include "frontend.fullname" . }}-ingress
   labels:
     {{- include "frontend.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
   annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+    {{- if .Values.domain }}
+    external-dns.alpha.kubernetes.io/hostname: {{ printf "app.%s" .Values.domain }}
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: {{ .Values.ingress.host }}
+    {{- if .Values.domain }}
+    - host: {{ printf "app.%s" .Values.domain }}
       http:
+    {{- else }}
+    - http:
+    {{- end }}
         paths:
           - path: /
             pathType: Prefix

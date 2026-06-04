@@ -1,0 +1,8 @@
+provider: aws
+domainFilters:
+  - yourdomain.com
+txtOwnerId: eks-production-cluster
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: ""  # set from terraform output irsa_external_dns_role_arn
+policy: sync

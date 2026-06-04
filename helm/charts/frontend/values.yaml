@@ -1,8 +1,7 @@
-fullname: "frontend-service"
-replicaCount: 1
 image:
   repository: node
   tag: "18-alpine"
+
 resources:
   requests:
     memory: "128Mi"
@@ -10,18 +9,10 @@ resources:
   limits:
     memory: "512Mi"
     cpu: "500m"
+
 service:
   type: ClusterIP
   port: 3000
-
-ingress:
-  annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/group.name: production
-  className: alb
-  host: "frontend-service.example.com"
 
 servicemonitor:
   enabled: true
@@ -32,33 +23,3 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 60
-      selectPolicy: Max
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Percent
-          value: 10
-          periodSeconds: 60
-      selectPolicy: Min
-
-vpa:
-  enabled: true
-  updateMode: "Off"
-
-affinity:
-  nodeAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-      - weight: 1
-        preference:
-          matchExpressions:
-            - key: role
-              operator: In
-              values:
-                - app

@@ -1,7 +1,7 @@
 postgresql:
   auth:
-    database: my_database
-    username: my_user
+    database: appdb
+    username: appuser
     password: "secret_password"
   primary:
     persistence:
