@@ -14,7 +14,7 @@ spec:
     - tags:
         karpenter.sh/discovery: eks-production-cluster
 
-  instanceProfile: eks-production-cluster-karpenter-node
+  role: Karpenter-eks-production-cluster-20260605084230063900000011
 
   blockDeviceMappings:
     - deviceName: /dev/xvda

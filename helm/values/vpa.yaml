@@ -1,0 +1,16 @@
+admissionController:
+  tolerations:
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+recommender:
+  tolerations:
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+updater:
+  tolerations:
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+crds:
+  tolerations:
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"

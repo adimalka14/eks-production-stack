@@ -12,5 +12,5 @@ spec:
     kind: StatefulSet
     name: {{ .Release.Name }}-postgresql
   updatePolicy:
-    updateMode: {{ .Values.vpa.updateMode | default "Off" }}
+    updateMode: {{ .Values.vpa.updateMode | default "Off" | quote }}
 {{- end }}

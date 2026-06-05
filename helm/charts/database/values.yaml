@@ -2,7 +2,10 @@ postgresql:
   auth:
     database: appdb
     username: appuser
-    password: "secret_password"
+    existingSecret: "db-credentials"
+    secretKeys:
+      adminPasswordKey: password
+      userPasswordKey: password
   primary:
     persistence:
       enabled: true

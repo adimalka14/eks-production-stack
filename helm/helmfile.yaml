@@ -1,64 +1,68 @@
 repositories:
-  - name: bitnami
-    url: https://charts.bitnami.com/bitnami
-  - name: prometheus-community
-    url: https://prometheus-community.github.io/helm-charts
-  - name: external-secrets
-    url: https://charts.external-secrets.io
-  - name: external-dns
-    url: https://kubernetes-sigs.github.io/external-dns
-
+- name: bitnami
+  url: https://charts.bitnami.com/bitnami
+- name: prometheus-community
+  url: https://prometheus-community.github.io/helm-charts
+- name: external-secrets
+  url: https://charts.external-secrets.io
+- name: external-dns
+  url: https://kubernetes-sigs.github.io/external-dns
+- name: cowboysysop
+  url: https://cowboysysop.github.io/charts/
 releases:
-  # Infrastructure — no dependencies
-  - name: kube-prometheus-stack
-    namespace: monitoring
-    chart: prometheus-community/kube-prometheus-stack
-    version: "~> 70.0"
-    values:
-      - ./values/monitoring.yaml
-
-  - name: external-secrets
-    namespace: external-secrets
-    chart: external-secrets/external-secrets
-    version: "~> 0.16"
-    values:
-      - ./values/external-secrets.yaml
-
-  - name: external-dns
-    namespace: external-dns
-    chart: external-dns/external-dns
-    version: "~> 1.16"
-    values:
-      - ./values/external-dns.yaml
-
-  - name: karpenter
-    namespace: karpenter
-    chart: oci://public.ecr.aws/karpenter/karpenter
-    version: "1.12.1"
-    values:
-      - ./values/karpenter.yaml
-
-  # Application — ordered by dependency
-  - name: database
-    namespace: production
-    chart: ./charts/database
-    needs:
-      - external-secrets/external-secrets
-    values:
-      - ./values/database.yaml
-
-  - name: backend
-    namespace: production
-    chart: ./charts/backend
-    needs:
-      - production/database
-    values:
-      - ./values/global.yaml
-
-  - name: frontend
-    namespace: production
-    chart: ./charts/frontend
-    needs:
-      - production/backend
-    values:
-      - ./values/global.yaml
+- name: kube-prometheus-stack
+  namespace: monitoring
+  chart: prometheus-community/kube-prometheus-stack
+  version: ~> 70.0
+  values:
+  - ./values/monitoring.yaml
+- name: external-secrets
+  namespace: external-secrets
+  chart: external-secrets/external-secrets
+  version: ~> 0.16
+  values:
+  - ./values/external-secrets.yaml
+  - ./values/generated.yaml
+- name: external-dns
+  namespace: external-dns
+  chart: external-dns/external-dns
+  version: ~> 1.16
+  values:
+  - ./values/external-dns.yaml
+  - ./values/generated.yaml
+- name: karpenter
+  namespace: karpenter
+  chart: oci://public.ecr.aws/karpenter/karpenter
+  version: 1.12.1
+  values:
+  - ./values/karpenter.yaml
+  - ./values/generated.yaml
+- name: vpa
+  namespace: kube-system
+  chart: cowboysysop/vertical-pod-autoscaler
+  version: ~> 11.1
+  values:
+  - ./values/vpa.yaml
+- name: database
+  namespace: production
+  chart: ./charts/database
+  needs:
+  - external-secrets/external-secrets
+  - kube-system/vpa
+  values:
+  - ./values/database.yaml
+  - ./values/generated.yaml
+- name: backend
+  namespace: production
+  chart: ./charts/backend
+  needs:
+  - production/database
+  values:
+  - ./values/global.yaml
+- name: frontend
+  namespace: production
+  chart: ./charts/frontend
+  needs:
+  - production/backend
+  values:
+  - ./values/global.yaml

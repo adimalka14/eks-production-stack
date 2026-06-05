@@ -16,5 +16,5 @@ spec:
   namespaceSelector:
     matchNames:
       - default
-      - {{ .Values.namespace }}
+      - {{ .Release.Namespace }}
 {{- end }}

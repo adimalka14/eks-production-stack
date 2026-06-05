@@ -11,5 +11,5 @@ spec:
     kind: Deployment
     name: {{ include "backend.fullname" . }}
   updatePolicy:
-    updateMode: {{ .Values.vpa.updateMode | default "Off" }}
+    updateMode: {{ .Values.vpa.updateMode | default "Off" | quote }}
 {{- end }}

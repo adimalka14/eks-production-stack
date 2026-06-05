@@ -9,6 +9,9 @@ override.tf
 override.tf.json
 
 # Helm
+helm/values/generated.yaml
+
+# Helm
 helm/charts/*/charts/*.tgz
 helm/charts/*/tmpcharts/
 
