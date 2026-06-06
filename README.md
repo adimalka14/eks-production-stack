@@ -127,6 +127,36 @@ frontend  →  needs: backend
 └── TROUBLESHOOTING.md     # Detailed post-mortem and fixes log
 ```
 
+
+## Project Showcase
+
+This project successfully demonstrates the following enterprise-grade Kubernetes capabilities:
+
+### 1. Infrastructure as Code (IaC) Automation
+Shows the successful automated deployment of the entire cluster, Karpenter nodes, and application stack using a single `helmfile sync` command.
+<br><br>
+<img src="public/img0.png" width="800">
+
+### 2. Self-Healing & High Availability
+Demonstrates killing a `frontend` pod and watching the Kubernetes ReplicaSet instantly recreate it (Stateless). It also demonstrates identical behavior for the PostgreSQL `database` pod, recovering its state with the `gp3` EBS volume (Stateful).
+<br><br>
+<img src="public/img1.png" width="800">
+
+### 3. Automated Secret Recovery
+Demonstrates deleting the local `db-credentials` Kubernetes secret. Within 7 seconds, the `ExternalSecrets` Operator detects the missing secret and automatically recreates it by fetching the values from AWS Secrets Manager.
+<br><br>
+<img src="public/img2.png" width="800">
+
+### 4. Node Draining, Karpenter Auto-Scaling & Metrics Recovery
+Demonstrates performing a `kubectl drain` on an active node, which triggers several self-healing mechanisms simultaneously:
+- **Karpenter Provisioning:** As application pods are evicted, Karpenter instantly recognizes the pending pods and provisions brand new `t3.medium` Spot instances (`NodeClaims`) within ~2 minutes to catch the load.
+- **Metrics Server Recovery (HPA):** The `metrics-server` pod was also evicted during the drain. The accompanying screenshot shows the `HPA` temporarily falling back to `<unknown>` CPU usage. A few minutes later, the metrics-server finishes restarting on the new node, and the HPA successfully resumes tracking CPU metrics (`cpu: 1%/70%`).
+- **Node Consolidation:** After 30 seconds of being empty, Karpenter automatically terminates the drained nodes (`consolidationPolicy: WhenEmptyOrUnderutilized`) to save costs.
+<br><br>
+<img src="public/img8.png" width="800">
+<br><br>
+<img src="public/img7.png" width="800">
+
 ## Prerequisites
 
 - Terraform >= 1.15

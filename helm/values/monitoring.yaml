@@ -27,7 +27,7 @@ alertmanager:
 grafana:
   tolerations: *tolerations
   enabled: true
-  adminPassword: "secret_password"
+  adminPassword: "123456"
   sidecar:
     dashboards:
       enabled: true
@@ -73,3 +73,10 @@ kube-state-metrics:
 
 prometheus-node-exporter:
   tolerations: *tolerations
+
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false

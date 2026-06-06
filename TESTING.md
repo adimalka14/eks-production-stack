@@ -75,7 +75,9 @@ kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitorin
 ```
 1. Open `http://localhost:9090` in your browser.
 2. Go to **Status** -> **Targets**.
-3. Verify that the `frontend`, `backend`, and `database` ServiceMonitors are listed and show a state of `UP`.
+3. Verify the targets:
+   - The `database` ServiceMonitor should be listed and show a state of `UP`.
+   - **Note:** The `frontend` and `backend` ServiceMonitors will intentionally show an `Error` or `Unknown` state (`non-compliant scrape target`). This is expected because they are currently running a simple dummy `node:18-alpine` container without a `/metrics` endpoint. Once the real application code with a Prometheus client library (like `prom-client`) is deployed, they will turn `UP`.
 
 ### Port-forward to Grafana
 ```bash
@@ -150,21 +152,31 @@ sleep 5
 kubectl get secret db-credentials -n production
 ```
 
-### 3. High Load Simulation
-Run a load test against the frontend to trigger HPA scale-up and Karpenter node provisioning.
-```bash
-# Run a temporary pod to generate traffic (using hey or curl)
-kubectl run load-generator --rm -ti --image=williamyeh/hey -- \
-  hey -z 2m -c 50 http://frontend-service.production.svc.cluster.local
-```
-While running, open another terminal and watch the cluster scale:
-```bash
-# Watch HPA increase replicas
-kubectl get hpa -n production -w
+### 3. High Load Simulation & Auto-Scaling (HPA & Karpenter)
+Test the automatic scaling of pods and nodes. You have two ways to trigger this:
 
-# Watch Karpenter provision new nodes when pods go into Pending state
+**Option A: Trigger HPA (Application Load)**
+Send massive traffic to force the `frontend` to consume CPU, triggering the HPA to add pods, which eventually triggers Karpenter when nodes run out of space.
+```bash
+# Run a heavy load generator (500 concurrent connections for 5 minutes)
+kubectl run load-generator --rm -ti --image=williamyeh/hey -- \
+  hey -z 5m -c 500 http://frontend-service.production.svc.cluster.local
+```
+Watch the HPA add replicas: `kubectl get hpa -n production -w`
+
+**Option B: Trigger Karpenter Directly (Infrastructure Load)**
+Deploy a dummy application that instantly requests a massive amount of CPU, forcing Karpenter to immediately provision new EC2 instances.
+```bash
+# Create 10 heavy pods
+kubectl create deployment scale-test --image=registry.k8s.io/pause:3.9 --replicas=10
+kubectl set resources deployment scale-test --requests=cpu=1,memory=1Gi
+
+# Watch Karpenter provision new nodes
 kubectl get nodeclaims -w
 kubectl get nodes -w
+
+# Cleanup (watch Karpenter terminate the empty nodes after 30 seconds)
+kubectl delete deployment scale-test
 ```
 
 ### 4. Database Persistence Test

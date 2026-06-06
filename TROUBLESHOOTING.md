@@ -1,24 +1,20 @@
-<div dir="rtl">
+# Troubleshooting and Fixes Report - EKS Production Stack
 
-# דוח תקלות ותיקונים - EKS Production Stack
-
-מסמך זה מרכז את כל הבעיות והשגיאות שהיו קיימות בפרויקט (הן ברמת הקוד ב-Terraform והן ברמת ההגדרות ב-Helm/Kubernetes), מסביר למה הן התרחשו במקור, וכיצד הן תוקנו כדי לייצר סביבה יציבה ועובדת מקצה לקצה.
+This document centralizes all issues and errors encountered in the project (both at the Terraform code level and the Helm/Kubernetes configuration level), explains why they occurred, and details how they were resolved to produce a stable, production-ready, end-to-end environment.
 
 ---
 
-## 1. שגיאת CrashLoopBackOff ו-CRDs חסרים ב-Vertical Pod Autoscaler (VPA)
-* **תיאור הבעיה:** הפודים של ה-VPA (`vpa-recommender`, `vpa-updater`, ו-`vpa-admission-controller`) קרסו שוב ושוב ולא הצליחו לעלות.
-* **סיבת התקלה:**
-  1. קובץ ה-Helmfile ניסה להתקין את ה-Chart של ה-VPA ללא ה-Custom Resource Definitions (CRDs) הנדרשים (כגון `VerticalPodAutoscaler`), מה שמנע מהשירותים לתפקד.
-  2. בקובץ `helm/values/vpa.yaml` היו פרמטרים כפולים תחת שדות ה-`args` של כל אחד מהפודים, שגרמו להתנגשות ולשגיאה בהפעלת ה-Container.
-* **התיקון:**
-  * נוסף `installCRDs: true` בהגדרות ה-Release של ה-VPA בקובץ `helmfile.yaml`.
-  * נוקו השורות הכפולות והסותרות מתוך קובץ ה-Values של `vpa.yaml`.
+## 1. CrashLoopBackOff & Missing CRDs in Vertical Pod Autoscaler (VPA)
+* **Problem Description:** VPA pods (`vpa-recommender`, `vpa-updater`, and `vpa-admission-controller`) crashed repeatedly and failed to start.
+* **Root Cause:**
+  1. The Helmfile attempted to install the VPA chart without the required Custom Resource Definitions (CRDs) (such as `VerticalPodAutoscaler`), preventing the services from running.
+  2. The `helm/values/vpa.yaml` file contained duplicate/conflicting parameter flags under the `args` fields of the pods, which caused container startup failures.
+* **The Fix:**
+  * Added `installCRDs: true` to the VPA release configuration in `helmfile.yaml`.
+  * Cleaned up duplicate and conflicting arguments in `vpa.yaml`.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
-```diff
+**Example Diff:**
+```yaml
 # helmfile.yaml
   - name: vpa
     namespace: kube-system
@@ -28,11 +24,7 @@
     - ./values/vpa.yaml
 ```
 
-</div>
-
-<div dir="ltr">
-
-```diff
+```yaml
 # helm/values/vpa.yaml (Example Fix)
   recommender:
     extraArgs:
@@ -41,120 +33,103 @@
 -     storage: prometheus
 ```
 
-</div>
+---
 
-## 2. חוסר תאימות של גרסאות ה-API ב-Karpenter (API Version Mismatch)
-* **תיאור הבעיה:** הקבצים של Karpenter שאחראים על הגדרת סוגי השרתים והקמתם נכשלו בשלב ה-`kubectl apply`.
-* **סיבת התקלה:** הקבצים עשו שימוש ב-API ישן או לא נכון (`karpenter.sh/v1beta1`) שלא תאם לגרסת ה-Karpenter שרצה בקלאסטר.
-* **התיקון:** עדכנו את `nodepool.yaml` לעבוד עם `karpenter.sh/v1` ואת `ec2nodeclass.yaml` לעבוד עם `karpenter.k8s.aws/v1`, בהתאם לדוקומנטציה המעודכנת של Karpenter.
+## 2. Karpenter API Version Mismatch
+* **Problem Description:** Karpenter resource manifests for configuring node provisioning failed during `kubectl apply`.
+* **Root Cause:** The manifests used an outdated/incorrect API version (`karpenter.sh/v1beta1`) that did not match the Karpenter version running in the cluster.
+* **The Fix:** Updated `nodepool.yaml` to use `karpenter.sh/v1` and `ec2nodeclass.yaml` to use `karpenter.k8s.aws/v1` in accordance with the latest Karpenter documentation.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
 # helm/manifests/nodepool.yaml
 - apiVersion: karpenter.sh/v1beta1
 + apiVersion: karpenter.sh/v1
-  kind: NodePool
-  metadata:
-    name: app-nodepool
+   kind: NodePool
+   metadata:
+     name: app-nodepool
 ```
-
-</div>
-
-<div dir="ltr">
 
 ```diff
 # helm/manifests/ec2nodeclass.yaml
 - apiVersion: karpenter.k8s.aws/v1beta1
 + apiVersion: karpenter.k8s.aws/v1
-  kind: EC2NodeClass
+   kind: EC2NodeClass
 ```
 
-</div>
+---
 
-## 3. שגיאת No Subnets Found ב-Karpenter (חוסר יכולת להקים שרתים)
-* **תיאור הבעיה:** למרות ש-Karpenter היה פעיל, הוא לא הצליח להקים שרתים (Nodes) והחזיר שגיאות שהוא לא מוצא רשתות (Subnets) להקים בהם את השרתים.
-* **סיבת התקלה:** ב-Terraform, המודול שיצר את הרשתות (`modules/vpc/main.tf`) תייג את ה-Subnets עם התגית `karpenter.sh/discovery = eks-production-stack-cluster` (כי הוא השתמש במשתנה `${var.project_name}`). אבל, ה-Cluster בפועל נקרא `eks-production-cluster`. כתוצאה מכך Karpenter לא מצא את הרשתות שלו כי הוא חיפש תגית אחרת.
-* **התיקון:** שינוי התגית ב-`main.tf` כך שתהיה מקודדת מראש לשם הנכון (`eks-production-cluster`) והרצת `terraform apply`.
+## 3. Karpenter "No Subnets Found" Error
+* **Problem Description:** Even though Karpenter was running, it failed to provision EC2 instances, logging errors that it could not find subnet resources.
+* **Root Cause:** In Terraform, the VPC module (`modules/vpc/main.tf`) tagged private subnets with `karpenter.sh/discovery = eks-production-stack-cluster` (derived from `${var.project_name}-cluster`). However, the actual cluster was named `eks-production-cluster`. Karpenter could not discover the subnets because of this tag mismatch.
+* **The Fix:** Updated the tags in `main.tf` to match the exact cluster name (`eks-production-cluster`) and ran `terraform apply`.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
 # terraform/modules/vpc/main.tf
-  private_subnet_tags = {
-    "kubernetes.io/role/internal-elb" = "1"
--   "karpenter.sh/discovery"          = "${var.project_name}-cluster"
-+   "karpenter.sh/discovery"          = "eks-production-cluster"
-  }
+   private_subnet_tags = {
+     "kubernetes.io/role/internal-elb" = "1"
+-    "karpenter.sh/discovery"          = "${var.project_name}-cluster"
++    "karpenter.sh/discovery"          = "eks-production-cluster"
+   }
 ```
 
-</div>
+---
 
-## 4. שגיאת AccessDenied ל-Karpenter בגישה ל-AWS
-* **תיאור הבעיה:** ברגע ש-Karpenter כבר מצא את הרשתות, הוא נתקל בשגיאת הרשאות (Access Denied) כשהוא ניסה להקים מכונות EC2.
-* **סיבת התקלה:** הקובץ `ec2nodeclass.yaml` הכיל בשדה ה-`role` ערך ישן של IAM Role שנוצר בריצות קודמות (לפני `terraform destroy`). בכל פעם ש-Terraform הורץ מחדש, הוא ייצר Role חדש, אבל הקובץ הסטטי לא התעדכן.
-* **התיקון האוטומטי:** הוספתי פקודת `sed` לתוך הסקריפט `scripts/generate-values.sh` שבאופן אוטומטי לוקחת את ה-Role ARN החדש ש-Terraform פולט בשלב ה-Outputs, ומזריקה אותו לתוך `ec2nodeclass.yaml`. כך הבעיה לא תחזור על עצמה במחיקה והקמה מחדש.
+## 4. Karpenter AWS AccessDenied Error
+* **Problem Description:** Once Karpenter discovered the subnets, it encountered an `AccessDenied` error when trying to provision EC2 instances.
+* **Root Cause:** The static `ec2nodeclass.yaml` referenced an outdated IAM Role ARN from a previous run. Every time Terraform is destroyed and recreated, it generates new role names/ARNs, leaving the hardcoded reference invalid.
+* **The Fix:** Added a dynamic replacement step (`sed`) in `scripts/generate-values.sh` to extract the fresh Karpenter Node Role ARN from the Terraform output and inject it into `ec2nodeclass.yaml` automatically prior to application.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Fix:**
 ```bash
-# Error logged by Karpenter
+# Error logged by Karpenter:
 # AccessDenied: User is not authorized to perform: iam:PassRole on resource
 
-# Fix: Added to scripts/generate-values.sh to dynamically inject the correct IAM Role
+# Fix: Dynamically inject the role into ec2nodeclass.yaml in scripts/generate-values.sh
 sed -i "s/role: Karpenter-.*/role: ${KARPENTER_NODE_ROLE}/" "$EC2NODECLASS_FILE"
 ```
 
-</div>
+---
 
-## 5. הפודים של External Secrets היו תקועים ב-Pending
-* **תיאור הבעיה:** הפודים שאחראים על התחברות ל-AWS Secrets Manager לא הצליחו למצוא שרת להריץ עליו את עצמם.
-* **סיבת התקלה:** השרתים היחידים שהיו זמינים בקלאסטר (ה-Fargate או ה-Managed Node Groups המקוריים) הכילו Taint של `CriticalAddonsOnly`, כלומר הם מקבלים רק פודים של מערכת. מכיוון ש-Karpenter סבל משגיאות 3 ו-4 הוא לא הקים שרתים חלופיים.
-* **התיקון:** ברגע שבעיות 3 ו-4 תוקנו, Karpenter הקים מיידית שרת עבור קבוצת ה-`app-nodepool` והפודים של External Secrets הצליחו לרוץ.
-
-**קוד להמחשה:**
-<div dir="ltr">
+## 5. External Secrets Pods Stuck in Pending
+* **Problem Description:** The pods responsible for fetching secrets from AWS Secrets Manager remained stuck in `Pending`.
+* **Root Cause:** The only active nodes in the cluster (Fargate or Managed Node Groups) carried the `CriticalAddonsOnly` taint, blocking regular workloads. Because of issues #3 and #4, Karpenter was unable to spin up app nodes to host these pods.
+* **The Fix:** Once the subnet tags and IAM role permissions for Karpenter were fixed, Karpenter immediately provisioned a node for `app-nodepool`, allowing the External Secrets pods to schedule and run.
 
 ```bash
-# Output from 'kubectl describe pod' when it was failing:
+# Output from 'kubectl describe pod' when failing:
 # Warning  FailedScheduling  default-scheduler  0/2 nodes are available: 2 node(s) had untolerated taint {CriticalAddonsOnly: true}.
 ```
 
-</div>
+---
 
-## 6. שגיאת InvalidProviderConfig ב-External Secrets (לא מצליח למשוך סודות)
-* **תיאור הבעיה:** הפוד של ה-Backend שלנו קרס עם שגיאת `CreateContainerConfigError` משום שהוא לא מצא את ה-Secret בשם `db-credentials`. הסיבה הייתה שה-`ClusterSecretStore` היה במצב שגיאה ולא הצליח להתחבר ל-AWS.
-* **סיבת התקלה:** קובץ ההגדרות `helm/values/external-secrets.yaml` דרש ציון של ה-IRSA Role (IAM Role for Service Accounts) כדי לאמת מול AWS, אבל השדה שם נשאר ריק: `eks.amazonaws.com/role-arn: ""`.
-* **התיקון האוטומטי:** בדיוק כמו בבעיה 4, הוספתי פקודת החלפה (`sed`) לסקריפט `scripts/generate-values.sh` שמזריקה פנימה באופן אוטומטי את ה-Role ARN החדש שנוצר ב-Terraform בכל הרצה מחדש.
+## 6. External Secrets InvalidProviderConfig Error
+* **Problem Description:** The backend pod crashed with `CreateContainerConfigError` because it could not find the `db-credentials` secret. The `ClusterSecretStore` was in an error state.
+* **Root Cause:** The Helm values for External Secrets (`helm/values/external-secrets.yaml`) left the IRSA role annotation empty: `eks.amazonaws.com/role-arn: ""`, preventing the controller from authenticating with AWS Secrets Manager.
+* **The Fix:** Added an automation step to `scripts/generate-values.sh` using `sed` to inject the dynamically generated IAM Role ARN from Terraform into the values file.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
-# Error logged by ClusterSecretStore
+# Error logged by ClusterSecretStore:
 # Warning  InvalidProviderConfig  cluster-secret-store  unable to create session: an IAM role must be associated
 
 # Fix: Added to scripts/generate-values.sh
 + sed -i "s|eks.amazonaws.com/role-arn: .*|eks.amazonaws.com/role-arn: "${EXTERNAL_SECRETS_ROLE_ARN}"|" "$EXT_SECRETS_FILE"
 ```
 
-</div>
+---
 
-## 7. פוד מסד הנתונים תקוע ב-Pending עקב StorageClass חסר
-* **תיאור הבעיה:** הפוד `database-postgresql-0` לא הצליח לקבל שרת, והשגיאה שהוצגה הייתה שה-`PersistentVolumeClaim` (הדיסק שלו) לא יכול להיווצר כי אין `StorageClass` בשם `gp3` מוגדר בקלאסטר. 
-* **סיבת התקלה:** התקנת ה-Helm של הדאטה-בייס ציפתה לכונן מסוג AWS gp3, אבל קוברנטיס לא מגיע עם gp3 כברירת מחדל אלא אם כן מגדירים לו את ה-StorageClass במפורש.
-* **התיקון:** 
-  1. יצרתי קובץ בשם `helm/manifests/gp3-storageclass.yaml` המגדיר את ה-`gp3`.
-  2. הוספתי פקודת `kubectl apply` לסקריפט ההפעלה `scripts/deploy.sh` כך שהוא יווצר לפני ההקמה של ה-Database, ורק לאחר מכן Karpenter יקים עבור הדאטה-בייס את שרת ה-`db-nodepool`.
+## 7. Database Pod Stuck in Pending due to Missing StorageClass
+* **Problem Description:** The PostgreSQL pod `database-postgresql-0` remained stuck in `Pending`. The events indicated that the `PersistentVolumeClaim` (PVC) could not be bound because the requested StorageClass `gp3` did not exist.
+* **Root Cause:** The PostgreSQL Helm chart requested the `gp3` storage class, which is not configured by default in AWS EKS.
+* **The Fix:** 
+  1. Created `helm/manifests/gp3-storageclass.yaml` defining the `gp3` storage class (backed by the EBS CSI driver).
+  2. Added a `kubectl apply` step in `scripts/deploy.sh` to register the StorageClass before deploying the database.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Manifest Code:**
 ```yaml
-# helm/manifests/gp3-storageclass.yaml (New File)
+# helm/manifests/gp3-storageclass.yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
@@ -169,16 +144,14 @@ parameters:
   fsType: ext4
 ```
 
-</div>
+---
 
-## 8. שגיאות בהתקנת Prometheus (kube-prometheus-stack)
-* **תיאור הבעיה:** בשלבים הראשונים, `helmfile sync` קרס בניסיון להתקין את חבילת הניטור של Prometheus ו-Grafana.
-* **סיבת התקלה:** קובץ ה-Values המקוסטם של מוניטורינג (`monitoring.yaml`) הכיל שגיאות תחביר, לייבלים (labels) חסרים או לא תואמים בבלוקים של ה-`serviceMonitors`, והגדרות חסרות סביב תאימות גרסאות.
-* **התיקון:** שיכתוב ותיקון שגיאות התחביר בקובץ ה-YAML של מוניטורינג, כדי לאפשר ל-Helm לסיים את התקנת הכלים בצורה חלקה בתוך הנאמפייס (Namespace) הנכון.
+## 8. Prometheus (kube-prometheus-stack) Installation Errors
+* **Problem Description:** `helmfile sync` failed when installing the Prometheus and Grafana stack.
+* **Root Cause:** The custom values file `monitoring.yaml` contained YAML syntax errors, missing/mismatched labels in `serviceMonitors` blocks, and invalid api-version configurations.
+* **The Fix:** Corrected YAML syntax and aligned labels in `monitoring.yaml` to allow Helm to deploy the resources successfully.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
 # helm/values/monitoring.yaml
   additionalServiceMonitors:
@@ -190,16 +163,14 @@ parameters:
         - port: http
 ```
 
-</div>
+---
 
-## 9. שגיאת מחיקה נתקעת (Webhook Timeout) בסקריפט destroy.sh
-* **תיאור הבעיה:** כשניסית להריץ את סקריפט המחיקה (`destroy.sh`), המערכת נתקעה והחזירה שגיאת Webhook Timeout בזמן שניסתה למחוק את `external-secret.yaml`.
-* **סיבת התקלה:** סקריפט המחיקה מחק קודם את שרתי ה-Karpenter (מה שהוביל לכיבוי השרת שעליו רץ ה-Webhook של External Secrets). לאחר מכן, קוברנטיס ניסה לפנות ל-Webhook כדי לאשר את מחיקת ה-Secret, אבל מכיוון שה-Webhook כבר נמחק פיזית, הפעולה נתקעה לנצח (Chicken and Egg).
-* **התיקון:** שיניתי את סדר הפקודות בתוך הסקריפט `destroy.sh`, כך שהוא קודם כל מוחק את ה-Secrets (בזמן שהשרתים וה-Webhook עדיין באוויר), ורק לאחר מכן מוחק את השרתים וה-NodePools של Karpenter.
+## 9. Webhook Timeout / Hang on Teardown (destroy.sh)
+* **Problem Description:** Running the teardown script `destroy.sh` caused the process to hang on deleting `external-secret.yaml` due to a Webhook timeout.
+* **Root Cause:** The teardown script deleted Karpenter resources first, immediately terminating the nodes hosting the External Secrets webhook pod. When Kubernetes tried to validate the deletion of the `ExternalSecret` resource, the webhook was unreachable, creating a deadlock.
+* **The Fix:** Rearranged the resource deletion order in `destroy.sh` so that Kubernetes resources and Secrets are deleted *before* terminating the Karpenter nodes and node pools.
 
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
 # scripts/destroy.sh
 - kubectl delete -f "$HELM_DIR/manifests/nodepool.yaml"
@@ -214,28 +185,20 @@ parameters:
 + kubectl delete -f "$HELM_DIR/manifests/ec2nodeclass.yaml"
 ```
 
-</div>
-
 ---
 
-### סיכום תהליך ה-Deploy האוטומטי
-בעזרת העדכונים הנ"ל לסקריפטים `deploy.sh` ו-`generate-values.sh`, תהליך המחיקה וההקמה מחדש כבר לא דורש שום התערבות ידנית. כל התלויות (IAM Roles, דיסקים, תגיות VPC ו-CRDs) מסונכרנות באופן שקוף לחלוטין.
+## 10. ImagePullBackOff in Database Backup CronJob
+* **Problem Description:** The database backup CronJob failed with `ImagePullBackOff`. Additionally, it was stuck in `Pending` when it couldn't schedule on database nodes.
+* **Root Cause:**
+  1. The image tag was incorrectly configured as `18.7.0` (which is the Helm Chart version, not the actual Docker image tag). The Bitnami image tag requires a suffix (e.g., `18.4.0-debian-12`).
+  2. The CronJob lacked the proper tolerations and node affinity to run on database-specific nodes (which carry taints to prevent other pods from scheduling on them).
+  3. Pulling from Docker Hub occasionally hit rate limits due to the AWS NAT Gateway.
+* **The Fix:**
+  * Updated the registry to pull from AWS ECR Public: `public.ecr.aws/bitnami/postgresql`.
+  * Referenced the correct PostgreSQL image tag from values: `{{ .Values.postgresql.image.tag }}`.
+  * Added tolerations and node affinity to the CronJob template.
 
-
-## 10. שגיאת ImagePullBackOff בגיבוי (בלבול בין גרסת Chart לגרסת Image)
-* **תיאור הבעיה:** משימת הגיבוי המתוזמנת (CronJob) נכשלה עם שגיאת `ImagePullBackOff` ולא הצליחה למשוך את תמונת ה-Docker. בנוסף, בשלבים שונים הפוד נתקע במצב `Pending` כי לא יכל לרוץ על שרתי ה-Database.
-* **סיבת התקלה:**
-  1. הוגדרה תגית התמונה ב-CronJob בתור `18.7.0` או שהיא נוסתה תחת השם `bitnamicharts/postgresql`. זוהי שגיאה נפוצה – `18.7.0` היא גרסת ה-**Helm Chart**, ולא גרסת ה-**Docker Image** (שהייתה `18.4.0` ודרשה שם ארוך הכולל את מערכת ההפעלה, למשל `18.4.0-debian-12`). כתוצאה מכך ה-Registry החזיר "Not Found".
-  2. במקביל, חסרה הייתה הגדרת חריגה (`Tolerations`) שתאפשר לגיבוי לרוץ על השרתים הייעודיים של ה-Database (שסומנו ב-`Taint` למניעת הרצת פודים אחרים).
-  3. משיכת התמונות מ-Docker Hub לעיתים הגיעה למגבלת קצב (Rate Limit) בגלל השימוש ב-AWS NAT Gateway, מה שהצריך מעבר למקור אמין ופתוח יותר.
-* **התיקון:**
-  * שינוי ה-Registry למשיכה ממאגר ה-ECR הפומבי של AWS (שהוא נטול מגבלות הורדה מתוך רשת אמזון): `public.ecr.aws/bitnami/postgresql`.
-  * שימוש בגרסה המדויקת והדינמית של מסד הנתונים בעזרת ההגדרות מה-Helm: `{{ .Values.postgresql.image.tag }}`.
-  * הוספת בלוק `tolerations` ו-`nodeAffinity` ל-CronJob.
-
-**קוד להמחשה:**
-<div dir="ltr">
-
+**Example Diff:**
 ```diff
 # helm/charts/database/templates/postgres-backup-cronjob.yaml
           containers:
@@ -261,40 +224,33 @@ parameters:
 +                         - "db"
 ```
 
-</div>
+---
 
+## 11. Advanced Database Backup Troubleshooting
+*This section covers resolving sequential errors discovered during execution.*
 
-## 11. פתרון תקלות מתקדם בגיבוי מסד הנתונים (Section 7 Backup)
-*חלק זה מבוסס על תהליך דיבוג עצמאי מעמיק שכלל מספר שגיאות רצופות.*
+**1. Registry Pull Failures (`ErrImagePull - bitnami/postgresql:18.4.0`)**
+* **Root Cause:** Bitnami stopped publishing specific tag versions to Docker Hub.
+* **The Fix:** Switched the registry to AWS ECR Public: `public.ecr.aws/bitnami/postgresql:18.4.0`.
 
-**1. שגיאת משיכת תמונה (ErrImagePull - bitnami/postgresql:18.4.0)**
-* **בעיה:** חברת Bitnami הפסיקו לפרסם תגיות ספציפיות ויציבות ב-Docker Hub.
-* **פתרון:** שימוש ב-ECR Public Registry הפתוח והמהיר של אמזון: `public.ecr.aws/bitnami/postgresql:18.4.0`.
-
-**2. נתיב awscli לא נכון (No such file or directory)**
-* **בעיה:** פקודת ההעתקה `cp -r` בקונטיינר ההתחלתי (initContainer) העתיקה את ה-symlink שנקרא `current` כקובץ טקסט ולא כ-link אמיתי לקבצי ההרצה.
-* **פתרון:** יצירת symlink חדש ודינמי מתוך ה-initContainer שמצביע לתיקייה הנכונה:
-<div dir="ltr">
-
+**2. Invalid `awscli` Executable Path (`No such file or directory`)**
+* **Root Cause:** The `cp -r` command in the initContainer copied the `current` symlink as a plain text file, breaking the executable lookup.
+* **The Fix:** Re-created the symlink dynamically during the initContainer execution:
 ```bash
 ln -sfn /tools/aws-cli/v2/$(ls /tools/aws-cli/v2/ | grep -v current) /tools/aws-cli/v2/current
 ```
 
-</div>
+**3. Entrypoint Conflict with `amazon/aws-cli` Image**
+* **Root Cause:** The AWS CLI Docker image executes the `aws` binary by default as its entrypoint, causing our shell commands (`cp`) to be interpreted as arguments to AWS CLI (e.g., `aws cp`).
+* **The Fix:** Overwrote the container entrypoint by setting `command: ["/bin/sh", "-c"]`.
 
-**3. התנגשות Entrypoint של amazon/aws-cli**
-* **בעיה:** תמונת ה-Docker של אמזון מריצה את הפקודה `aws` כ-Entrypoint ברירת מחדל, ולכן פקודת ה-`cp` התפרשה בטעות כחלק מפקודת `aws cp`.
-* **פתרון:** דריסת ה-Entrypoint ההתחלתי באמצעות הגדרת `command: ["/bin/sh", "-c"]`.
+**4. Database Password Authentication Failed**
+* **Root Cause:** The database persistent volume (PVC) retained the old password (`secret_password`), while the newly generated Secrets and CronJob used a dynamically generated password (`123456`).
+* **The Fix:** Deleted the old database PVC and restarted the pod, forcing PostgreSQL to re-initialize using the new password secret.
 
-**4. כישלון אימות סיסמה (Password authentication failed)**
-* **בעיה:** מסד הנתונים הוקם עם הסיסמה `secret_password` שנשמרה פיזית ב-PVC, בעוד שה-CronJob וה-ExternalSecrets השתמשו בסיסמה האקראית המאובטחת `123456`.
-* **פתרון:** מחיקת ה-PVC הישן ומחיקת הפוד, מה שגרם ל-DB לאתחל את עצמו מחדש עם הסיסמה הנכונה מהסיקרט החדש.
-
-**5. שימוש ב-existingSecret לא עבד כברירת מחדל**
-* **בעיה:** ה-Chart של Bitnami לא ידע איזה Key לקחת מתוך ה-`db-credentials` (כיוון שהיו לו שמות מותאמים אישית).
-* **פתרון:** הוספת מיפוי Keys מפורש תחת בלוק ה-auth ב-Values:
-<div dir="ltr">
-
+**5. Chart `existingSecret` Misconfiguration**
+* **Root Cause:** The Bitnami PostgreSQL chart did not know which keys to read from our custom `db-credentials` secret.
+* **The Fix:** Added explicit key mappings under the `auth` section in the values configuration:
 ```yaml
 postgresql:
   auth:
@@ -304,30 +260,56 @@ postgresql:
       userPasswordKey: password
 ```
 
-</div>
-
-**6. שגיאת הרשאות בגישה לתיקיית aws. (Permission denied: /.aws)**
-* **בעיה:** כלי ה-awscli ניסה לכתוב קבצי תצורה לתיקיית `/`, אבל הקונטיינר של ביטנמי רץ מטעמי אבטחה כמשתמש מוגבל (user 1001).
-* **פתרון:** הוספת משתנה סביבה שמפנה את ספריית הבית לתיקייה זמנית מורשית:
-<div dir="ltr">
-
+**6. Directory Permission Denied (`Permission denied: /.aws`)**
+* **Root Cause:** The AWS CLI attempted to write configuration files to `/`, which failed because the Bitnami container runs under a non-root user (UID 1001) for security.
+* **The Fix:** Set the `HOME` environment variable to a writable temporary directory:
 ```yaml
 - name: HOME
   value: /tmp
 ```
 
-</div>
+---
 
-**7. שגיאת Timeout בעדכון VPA**
-* **בעיה:** פקודת `helmfile sync` נתקעה וזרקה `cannot patch VerticalPodAutoscaler: Timeout`.
-* **פתרון:** מחיקה ידנית של אובייקט ה-VPA התקוע כדי לאפשר ל-Helm ליצור אותו מחדש.
-<div dir="ltr">
+## 12. AWS Load Balancer Controller (ALB) Troubleshooting
 
+**1. AWS Load Balancer Controller - MissingEndpoint**
+* **Root Cause:** The controller failed with `MissingEndpoint: 'Endpoint' configuration is required for this service`. This was because the region and VPC configurations failed to parse correctly when defined inline in `helmfile.yaml`'s `set:` block due to formatting/quote parsing issues.
+* **The Fix:** Moved these configuration values to a dedicated values file generated dynamically by `generate-values.sh` (`values/alb.yaml`) and loaded it via `values:` in `helmfile.yaml`.
+
+**2. AWS Load Balancer Controller - NoCredentialProviders**
+* **Root Cause:** The controller pods started without the AWS credentials environment variables. The ServiceAccount annotation `eks.amazonaws.com/role-arn` was missing due to configuration merging issues. Furthermore, since pod identity credentials are injected at pod creation time, existing pods did not receive them even after updating the ServiceAccount.
+* **The Fix:** Added the explicit ServiceAccount configuration with annotations to `alb.yaml` and manually restarted the controller pods:
 ```bash
-kubectl delete vpa database-database-vpa -n production
+kubectl delete pod -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
 ```
+This triggered EKS Pod Identity to inject the required `AWS_ROLE_ARN` environment variables upon pod recreation.
 
-</div>
+---
 
+## 13. External-DNS Troubleshooting
 
-</div>
+**External-DNS - no EC2 IMDS role found**
+* **Root Cause:** The External-DNS logs showed authorization failures when trying to sync Route 53 records. The IAM role annotation in `external-dns.yaml` was empty due to configuration mismatches during Helmfile parsing.
+* **The Fix:**
+  1. Updated `scripts/generate-values.sh` to inject the correct IAM role ARN into `values/external-dns.yaml` using `sed`.
+  2. Applied the configuration changes using `helmfile sync` and restarted the deployment: `kubectl rollout restart deployment external-dns`.
+
+---
+
+## 14. Horizontal Pod Autoscaler (HPA) Troubleshooting
+
+**1. HPA shows Target CPU/Memory as `<unknown>/70%` and fails to scale**
+* **Root Cause:** EKS clusters do not include a metrics harvester by default. Without `metrics-server` installed, Kubernetes is unable to fetch CPU and memory usage statistics.
+* **The Fix:** Added the official `metrics-server` chart to `helmfile.yaml` and installed it in the `kube-system` namespace.
+
+**2. HPA unable to find target deployment (`FailedGetScale`)**
+* **Root Cause:** The `scaleTargetRef` in `hpa.yaml` and `vpa.yaml` referenced the base name (e.g. `backend`), but the actual Deployment resource was defined as `backend-deployment`.
+* **The Fix:** Updated the Helm chart templates to point to the correct Deployment resource name:
+```diff
+# helm/charts/backend/templates/hpa.yaml
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+-   name: {{ include "backend.fullname" . }}
++   name: {{ include "backend.fullname" . }}-deployment
+```

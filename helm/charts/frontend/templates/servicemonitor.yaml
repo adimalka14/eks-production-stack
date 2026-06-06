@@ -10,7 +10,7 @@ spec:
     matchLabels:
       {{- include "frontend.selectorLabels" . | nindent 6 }}
   endpoints:
-    - port: metrics
+    - port: http
       interval: 30s
       path: /metrics
   namespaceSelector:

@@ -14,7 +14,7 @@ spec:
     - tags:
         karpenter.sh/discovery: eks-production-cluster
 
-  role: Karpenter-eks-production-cluster-20260605084230063900000011
+  role: Karpenter-eks-production-cluster-20260606163459956100000012
 
   blockDeviceMappings:
     - deviceName: /dev/xvda

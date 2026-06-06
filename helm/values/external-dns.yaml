@@ -4,5 +4,5 @@ domainFilters:
 txtOwnerId: eks-production-cluster
 serviceAccount:
   annotations:
-    eks.amazonaws.com/role-arn: ""  # set from terraform output irsa_external_dns_role_arn
+    eks.amazonaws.com/role-arn: "arn:aws:iam::314323855520:role/eks-production-cluster-external-dns"
 policy: sync
