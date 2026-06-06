@@ -51,3 +51,18 @@ output "backup_bucket_name" {
   description = "S3 bucket name for database backups"
   value       = aws_s3_bucket.backups.bucket
 }
+
+output "irsa_alb_controller_role_arn" {
+  description = "IAM role ARN for AWS Load Balancer Controller"
+  value       = module.irsa_alb_controller.iam_role_arn
+}
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.vpc.vpc_id
+}
+
+output "region" {
+  description = "AWS Region"
+  value       = var.region
+}

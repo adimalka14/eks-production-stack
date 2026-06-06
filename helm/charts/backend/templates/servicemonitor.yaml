@@ -10,11 +10,11 @@ spec:
     matchLabels:
       {{- include "backend.selectorLabels" . | nindent 6 }}
   endpoints:
-    - port: metrics
+    - port: http
       interval: 30s
       path: /metrics
   namespaceSelector:
     matchNames:
       - default
-      - {{ .Values.namespace }}
+      - {{ .Release.Namespace }}
 {{- end }}

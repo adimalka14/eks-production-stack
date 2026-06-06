@@ -18,21 +18,34 @@ spec:
       template:
         spec:
           serviceAccountName: backup-sa
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: role
+                        operator: In
+                        values:
+                          - app
           initContainers:
             - name: install-awscli
               image: amazon/aws-cli:latest
               command:
-                - cp
-                - -r
-                - /usr/local/aws-cli
-                - /tools/
+                - /bin/sh
+                - -c
+                - |
+                  cp -r /usr/local/aws-cli /tools/ && \
+                  ln -sfn /tools/aws-cli/v2/$(ls /tools/aws-cli/v2/ | grep -v current) /tools/aws-cli/v2/current
               volumeMounts:
                 - name: tools
                   mountPath: /tools
           containers:
             - name: backup
-              image: bitnami/postgresql:18.4.0
+              image: public.ecr.aws/bitnami/postgresql:18.4.0
               env:
+                - name: HOME
+                  value: /tmp
                 - name: DB_HOST
                   valueFrom:
                     secretKeyRef:
@@ -52,6 +65,10 @@ spec:
                   value: {{ .Values.postgresql.auth.database }}
                 - name: S3_BUCKET
                   value: {{ .Values.backup.s3Bucket }}
+                - name: AWS_ROLE_ARN
+                  value: {{ .Values.backup.irsaRoleArn }}
+                - name: AWS_WEB_IDENTITY_TOKEN_FILE
+                  value: /var/run/secrets/eks.amazonaws.com/serviceaccount/token
               command:
                 - /bin/bash
                 - -c

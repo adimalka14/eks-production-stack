@@ -2,11 +2,16 @@
 **/.terraform/
 *.tfstate
 *.tfstate.backup
+*.tfstate.*.backup
 *.tfstate.lock.info
 .terraform.lock.hcl
 crash.log
 override.tf
 override.tf.json
+
+# Helm
+helm/values/generated.yaml
+helm/values/alb.yaml
 
 # Helm
 helm/charts/*/charts/*.tgz

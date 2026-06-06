@@ -1,17 +1,33 @@
+# Tolerations for the system node group taint (CriticalAddonsOnly=true:NoSchedule)
+# Without this, ALL prometheus/grafana pods get stuck in Pending forever
+_tolerations: &tolerations
+  - key: CriticalAddonsOnly
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+
 prometheus:
   prometheusSpec:
     retention: 7d
     storageSpec:
-      spec:
-        storageClassName: gp3
-        resources:
-          requests:
-            storage: 10Gi
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2   # gp3 does not exist; only gp2 is available on this cluster
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
     serviceMonitorSelectorNilUsesHelmValues: false
+    tolerations: *tolerations
+
+alertmanager:
+  alertmanagerSpec:
+    tolerations: *tolerations
 
 grafana:
+  tolerations: *tolerations
   enabled: true
-  adminPassword: "secret_password"
+  adminPassword: "123456"
   sidecar:
     dashboards:
       enabled: true
@@ -45,3 +61,22 @@ grafana:
         gnetId: 11159   # Node.js Application (prom-client)
         revision: 1
         datasource: Prometheus
+
+prometheusOperator:
+  tolerations: *tolerations
+  admissionWebhooks:
+    patch:
+      tolerations: *tolerations
+
+kube-state-metrics:
+  tolerations: *tolerations
+
+prometheus-node-exporter:
+  tolerations: *tolerations
+
+kubeControllerManager:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
